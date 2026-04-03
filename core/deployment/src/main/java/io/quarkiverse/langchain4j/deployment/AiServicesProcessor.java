@@ -513,6 +513,14 @@ public class AiServicesProcessor {
                     ? instance.value("maxSequentialToolInvocations").asInt()
                     : 0;
 
+            Integer maxToolCallsPerResponse = instance.value("maxToolCallsPerResponse") != null
+                    ? instance.value("maxToolCallsPerResponse").asInt()
+                    : 0;
+            if (maxToolCallsPerResponse < -1) {
+                throw new IllegalArgumentException(
+                        "maxToolCallsPerResponse must be -1 or greater, but was: " + maxToolCallsPerResponse);
+            }
+
             boolean allowContinuousForcedToolCalling = instance.value("allowContinuousForcedToolCalling") != null
                     ? instance.value("allowContinuousForcedToolCalling").asBoolean()
                     : false;
@@ -557,6 +565,7 @@ public class AiServicesProcessor {
                             toolArgumentsErrorHandlerDotName(declarativeAiServiceClassInfo, generatedBeanProducer),
                             toolExecutionErrorHandlerDotName(declarativeAiServiceClassInfo, generatedBeanProducer),
                             maxSequentialToolInvocations,
+                            maxToolCallsPerResponse,
                             allowContinuousForcedToolCalling,
                             // we need to make these @DefaultBean because there could be other CDI beans of the same type that need to take precedence
                             impliedRegisterAiServiceTarget.contains(declarativeAiServiceClassInfo.name()),
@@ -1063,6 +1072,7 @@ public class AiServicesProcessor {
                                     classInputGuardrails(bi),
                                     classOutputGuardrails(bi),
                                     maxSequentialToolInvocations,
+                                    bi.getMaxToolCallsPerResponse(),
                                     allowContinuousForcedToolCalling,
                                     bi.isShouldThrowExceptionOnEventError())))
                     .setRuntimeInit()
