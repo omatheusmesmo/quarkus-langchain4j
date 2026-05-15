@@ -379,6 +379,7 @@ public class AiServicesProcessor {
     @BuildStep
     public void findDeclarativeServices(CombinedIndexBuildItem indexBuildItem,
             CustomScopeAnnotationsBuildItem customScopes,
+            LangChain4jBuildConfig config,
             List<AnnotationsImpliesAiServiceBuildItem> annotationsImpliesAiServiceItems,
             BuildProducer<RequestChatModelBeanBuildItem> requestChatModelBeanProducer,
             BuildProducer<RequestModerationModelBeanBuildItem> requestModerationModelBeanProducer,
@@ -589,7 +590,8 @@ public class AiServicesProcessor {
                             // we need to make these @DefaultBean because there could be other CDI beans of the same type that need to take precedence
                             impliedRegisterAiServiceTarget.contains(declarativeAiServiceClassInfo.name()),
                             shouldThrowExceptionOnEventError,
-                            chatMemoryFlushStrategySupplierClassDotName));
+                            chatMemoryFlushStrategySupplierClassDotName,
+                            hasRecordChatHistory(declarativeAiServiceClassInfo, config.chatHistoryEnabled())));
 
         }
         toolProviderProducer.produce(new ToolProviderMetaBuildItem(toolProviderInfos));
@@ -665,6 +667,21 @@ public class AiServicesProcessor {
             beanName = Optional.ofNullable(namedAnno.value().asString());
         }
         return beanName;
+    }
+
+    private static boolean hasRecordChatHistory(ClassInfo declarativeAiServiceClassInfo, boolean globalEnabled) {
+        if (globalEnabled) {
+            return true;
+        }
+        if (declarativeAiServiceClassInfo.hasAnnotation(LangChain4jDotNames.RECORD_CHAT_HISTORY)) {
+            return true;
+        }
+        for (MethodInfo method : declarativeAiServiceClassInfo.methods()) {
+            if (method.hasAnnotation(LangChain4jDotNames.RECORD_CHAT_HISTORY)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static DotName cdiScope(CustomScopeAnnotationsBuildItem customScopes, ClassInfo declarativeAiServiceClassInfo) {
@@ -935,6 +952,7 @@ public class AiServicesProcessor {
         boolean needsModerationModelBean = false;
         boolean needsImageModelBean = false;
         boolean needsToolProviderBean = false;
+        boolean needsChatHistoryRecorderBean = false;
         Set<DotName> allToolNames = new HashSet<>();
         Set<DotName> allToolProviders = new HashSet<>();
         Set<DotName> allToolHallucinationStrategies = new HashSet<>();
@@ -1098,7 +1116,8 @@ public class AiServicesProcessor {
                                     bi.getMaxToolCallsPerResponse(),
                                     allowContinuousForcedToolCalling,
                                     bi.isShouldThrowExceptionOnEventError(),
-                                    defaultMemoryIdProviderClassName)))
+                                    defaultMemoryIdProviderClassName,
+                                    bi.isRecordChatHistory())))
                     .setRuntimeInit()
                     .addQualifier()
                     .annotation(LangChain4jDotNames.QUARKUS_AI_SERVICE_CONTEXT_QUALIFIER).addValue("value", serviceClassName)
@@ -1219,6 +1238,11 @@ public class AiServicesProcessor {
                             new Type[] { ClassType.create(OutputGuardrail.class) }, null))
                     .done();
 
+            if (bi.isRecordChatHistory()) {
+                configurator.addInjectionPoint(ClassType.create(LangChain4jDotNames.CHAT_HISTORY_RECORDER));
+                needsChatHistoryRecorderBean = true;
+            }
+
             syntheticBeanProducer.produce(configurator.done());
         }
 
@@ -1254,6 +1278,9 @@ public class AiServicesProcessor {
         }
         if (!allToolHallucinationStrategies.isEmpty()) {
             unremovableProducer.produce(UnremovableBeanBuildItem.beanTypes(allToolHallucinationStrategies));
+        }
+        if (needsChatHistoryRecorderBean) {
+            unremovableProducer.produce(UnremovableBeanBuildItem.beanTypes(LangChain4jDotNames.CHAT_HISTORY_RECORDER));
         }
     }
 
@@ -1818,8 +1845,13 @@ public class AiServicesProcessor {
                         .map(AiServicesProcessor::classOutputGuardrails)
                         .orElse(null);
 
+                var recordChatHistory = aiServiceBuildItem
+                        .map(DeclarativeAiServiceBuildItem::isRecordChatHistory)
+                        .orElse(false);
+
                 perClassMetadata.put(ifaceName,
-                        new AiServiceClassCreateInfo(perMethodMetadata, implClassName, inputGuardrails, outputGuardrails));
+                        new AiServiceClassCreateInfo(perMethodMetadata, implClassName, inputGuardrails, outputGuardrails,
+                                recordChatHistory));
                 // make the constructor accessible reflectively since that is how we create the instance
                 reflectiveClassProducer.produce(ReflectiveClassBuildItem.builder(implClassName).build());
             }

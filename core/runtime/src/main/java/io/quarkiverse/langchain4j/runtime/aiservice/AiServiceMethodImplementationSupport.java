@@ -91,6 +91,7 @@ import dev.langchain4j.service.AiServiceTokenStream;
 import dev.langchain4j.service.AiServiceTokenStreamParameters;
 import dev.langchain4j.service.IllegalConfigurationException;
 import dev.langchain4j.service.Result;
+import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.output.ServiceOutputParser;
 import dev.langchain4j.service.tool.ToolArgumentsErrorHandler;
 import dev.langchain4j.service.tool.ToolErrorContext;
@@ -104,6 +105,7 @@ import dev.langchain4j.service.tool.ToolProviderRequest;
 import dev.langchain4j.service.tool.ToolProviderResult;
 import dev.langchain4j.spi.ServiceHelper;
 import io.quarkiverse.langchain4j.AudioUrl;
+import io.quarkiverse.langchain4j.ChatHistoryRecorder;
 import io.quarkiverse.langchain4j.ImageUrl;
 import io.quarkiverse.langchain4j.PdfUrl;
 import io.quarkiverse.langchain4j.VideoUrl;
@@ -227,6 +229,16 @@ public class AiServiceMethodImplementationSupport {
         boolean supportsJsonSchema = supportsJsonSchema(context, methodCreateInfo, methodArgs);
 
         UserMessage userMessage = prepareUserMessage(context, methodCreateInfo, methodArgs, supportsJsonSchema);
+
+        ChatHistoryRecorder chatHistoryRecorder = context.chatHistoryRecorder;
+        if (chatHistoryRecorder != null && userMessage != null) {
+            try {
+                chatHistoryRecorder.onUserMessage(memoryId, userMessage.singleText());
+            } catch (RuntimeException e) {
+                log.warnf(e, "Failed to record user message for memoryId=%s, continuing without recording.", memoryId);
+            }
+        }
+
         Map<String, Object> templateVariables = getTemplateVariables(methodArgs, methodCreateInfo.getUserMessageInfo());
 
         Type returnType = methodCreateInfo.getReturnType();
@@ -337,7 +349,11 @@ public class AiServiceMethodImplementationSupport {
                                     .aiServiceListenerRegistrar(context.eventListenerRegistrar)
                                     .build())
                     .build();
-            return new AiServiceTokenStream(aiServiceTokenStreamParams);
+            TokenStream tokenStream = new AiServiceTokenStream(aiServiceTokenStreamParams);
+            if (chatHistoryRecorder != null) {
+                tokenStream = new RecordingTokenStream(tokenStream, chatHistoryRecorder, memoryId);
+            }
+            return tokenStream;
         }
 
         var actualAugmentationResult = augmentationResult;
@@ -383,9 +399,31 @@ public class AiServiceMethodImplementationSupport {
                         });
             }
 
-            return stream.plug(m -> ResponseAugmenterSupport.apply(m, methodCreateInfo,
+            stream = stream.plug(m -> ResponseAugmenterSupport.apply(m, methodCreateInfo,
                     new ResponseAugmenterParams(actualUserMessage, chatMemory, actualAugmentationResult,
                             methodCreateInfo.getUserMessageTemplate(), templateVariables)));
+
+            if (chatHistoryRecorder != null) {
+                StringBuilder streamBuffer = new StringBuilder();
+                stream = stream.invoke(item -> {
+                    if (item instanceof String s) {
+                        streamBuffer.append(s);
+                    } else if (item instanceof ChatEvent.PartialResponseEvent pre) {
+                        streamBuffer.append(pre.getChunk());
+                    }
+                }).onCompletion().invoke(() -> {
+                    try {
+                        chatHistoryRecorder.onAgentMessage(memoryId, streamBuffer.toString());
+                        chatHistoryRecorder.onCompleted(memoryId);
+                    } catch (RuntimeException e) {
+                        log.warnf(e,
+                                "Failed to record agent message for memoryId=%s, continuing without recording.",
+                                memoryId);
+                    }
+                });
+            }
+
+            return stream;
         }
 
         Future<Moderation> moderationFuture = triggerModerationIfNeeded(context, methodCreateInfo, messagesToSend);
@@ -509,6 +547,16 @@ public class AiServiceMethodImplementationSupport {
                         .finalResponse(finalResponse)
                         .build();
 
+                if (chatHistoryRecorder != null) {
+                    try {
+                        chatHistoryRecorder.onAgentMessage(memoryId, finalResponse.aiMessage().text());
+                        chatHistoryRecorder.onCompleted(memoryId);
+                    } catch (RuntimeException e) {
+                        log.warnf(e,
+                                "Failed to record agent message for memoryId=%s, continuing without recording.", memoryId);
+                    }
+                }
+
                 context.eventListenerRegistrar.fireEvent(
                         AiServiceCompletedEvent.builder()
                                 .invocationContext(invocationContext)
@@ -581,6 +629,15 @@ public class AiServiceMethodImplementationSupport {
 
         // everything worked as expected so let's commit the messages
         committableChatMemory.commit();
+
+        if (chatHistoryRecorder != null) {
+            try {
+                chatHistoryRecorder.onAgentMessage(memoryId, response.aiMessage().text());
+                chatHistoryRecorder.onCompleted(memoryId);
+            } catch (RuntimeException e) {
+                log.warnf(e, "Failed to record agent message for memoryId=%s, continuing without recording.", memoryId);
+            }
+        }
 
         var responseAugmenterParam = new ResponseAugmenterParams(userMessage, committableChatMemory, augmentationResult,
                 userMessageTemplate, templateVariables);
