@@ -60,7 +60,7 @@ import io.smallrye.mutiny.Multi;
 public interface MistralAiRestApi {
 
     /**
-     * Perform a blocking request for a completion response
+     * Perform a blocking request for a completion response.
      */
     @Path("chat/completions")
     @POST
