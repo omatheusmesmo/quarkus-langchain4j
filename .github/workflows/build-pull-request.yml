@@ -346,6 +346,7 @@ jobs:
 
   native-tests:
     needs: quick-build
+    if: needs.quick-build.outputs.it_modules != '[]'
     name: Native tests - ${{matrix.module}}
     strategy:
       fail-fast: false
@@ -399,6 +400,7 @@ jobs:
 
   in-process-embedding-model-tests:
     needs: quick-build
+    if: needs.quick-build.outputs.in_process_embedding_modules != '[]'
     name: In process embedding model tests - ${{matrix.module}}
     strategy:
       fail-fast: false
