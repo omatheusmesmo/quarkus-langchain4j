@@ -1,0 +1,32 @@
+# Companion gate for docs-only PRs.
+#
+# The main PR workflow (build-pull-request.yml) is skipped when a PR touches
+# ONLY the paths below (its paths-ignore). A skipped workflow never reports the
+# "PR CI Gate" status, which would leave a required check permanently pending.
+# This workflow posts a passing "PR CI Gate" for such docs-only PRs so they can
+# merge. The job name MUST stay identical to the gate job in build-pull-request.yml.
+#
+# Caveat for branch protection: on a MIXED PR (docs + code), both this workflow
+# and the main one trigger, so two "PR CI Gate" check runs are produced. Validate
+# the required-check behavior for that case when configuring branch protection.
+name: PR CI Gate (docs-only)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.gitignore'
+      - 'CODEOWNERS'
+      - 'LICENSE'
+      - '*.md'
+      - '*.adoc'
+      - '*.txt'
+      - '.all-contributorsrc'
+
+jobs:
+  pr-ci-gate:
+    name: PR CI Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Docs-only change, no build required
+        run: echo "Docs-only change; the full PR CI is intentionally skipped."
