@@ -20,7 +20,7 @@ import org.jboss.logging.Logger;
  * <p>
  * <a href="https://huggingface.co/beehive-lab">Beehive Lab</a> HuggingFace repository.
  * <p>
- * Reused implementation of the former Llama3ModelRegistry
+ * Reused implementation of the former Llama3ModelRegistry.
  */
 @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
 public class JitLLMModelRegistry {
