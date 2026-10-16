@@ -91,15 +91,18 @@ jobs:
           # so every other Maven invocation is inert; we enable it only here for the report.
           # disableOnBaseBranch makes Scalpel force a full build when the PR targets a release branch (\d+.\d+).
           # Non-fatal: on error, leave no report so the empty check below fails safe to a full build.
+          # The JDK-gated profiles (jitllm 21+, jinfer 25+) are forced on so that Scalpel sees those modules
+          # from this JDK 17 run, including when they are only impacted through a dependency (e.g. core).
+          # The enforcer is skipped because jinfer requires JDK 25; validate does not compile anything.
           ./mvnw -q -Dscalpel.enabled=true -Dincremental -Dscalpel.mode=report \
+            -Pjdk21-plus,jdk25-plus -Denforcer.skip=true \
             -Dscalpel.baseBranch="origin/${BASE_REF}" \
             -Dscalpel.disableOnBaseBranch='\d+\.\d+' \
             -Dscalpel.reportFile=target/scalpel-report.json validate \
             || echo "Scalpel report generation failed; will fail safe to a full build"
 
           # Missing report (tool error) or an explicit full-build signal -> full build.
-          # fullBuildTriggered covers release-branch disable and disableTriggers; it is checked before the
-          # jitllm/jinfer force-include below so a release-branch PR that also touches jitllm still full-builds.
+          # fullBuildTriggered covers release-branch disable and disableTriggers.
           if [ ! -f target/scalpel-report.json ] || \
              [ "$(jq -r '.fullBuildTriggered // false' target/scalpel-report.json)" = "true" ]; then
             echo "ALL" > "$IMPACTED"
@@ -107,16 +110,8 @@ jobs:
             exit 0
           fi
 
-          # Impacted = affected modules (excluding upstream-only) ...
-          IMPACTED_MODULES=$(jq -r '.affectedModules[] | select(.category != "UPSTREAM") | .path' target/scalpel-report.json)
-
-          # ... unioned with force-included JDK-gated modules (jitllm 21+, jinfer 25+) that are absent from
-          # the JDK 17 reactor Scalpel analyzes here, so it can never report them on its own.
-          FORCED=$(git diff --name-only "origin/${BASE_REF}...HEAD" \
-            | grep -E '^(model-providers/(jitllm|jinfer)|integration-tests/jinfer)/' \
-            | sed -E 's#^((model-providers|integration-tests)/(jitllm|jinfer))/.*#\1#' | sort -u || true)
-
-          COMBINED=$(printf '%s\n%s\n' "$IMPACTED_MODULES" "$FORCED" | sed '/^$/d' | sort -u)
+          # Impacted = affected modules (excluding upstream-only)
+          COMBINED=$(jq -r '.affectedModules[] | select(.category != "UPSTREAM") | .path' target/scalpel-report.json | sort -u)
 
           # Nothing impacted -> fail safe to a full build (never skip everything).
           if [ -z "$COMBINED" ]; then
