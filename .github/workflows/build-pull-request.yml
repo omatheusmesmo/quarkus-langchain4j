@@ -25,7 +25,7 @@ jobs:
   # Artifacts will be reused in the other jobs
   quick-build:
     name: Quick Build
-    runs-on: runs-on=${{ github.run_id }}/runner=linux
+    runs-on: ubuntu-latest
     # Skip draft PRs, rerun as soon as its removed
     if: >-
       github.event_name != 'pull_request' || (
@@ -41,8 +41,6 @@ jobs:
       scalpel_impacted: ${{ steps.matrices.outputs.scalpel_impacted }}
 
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/checkout@v4
         with:
           # Full history so Scalpel and git diff can compare against the base branch
@@ -205,11 +203,9 @@ jobs:
 
   documentation-check:
     name: Documentation check
-    runs-on: runs-on=${{ github.run_id }}/runner=linux
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/checkout@v4
 
       - name: Validate guide metadata
@@ -261,10 +257,8 @@ jobs:
         java: [ 17, 21, 25 ]
         module: ${{fromJson(needs.quick-build.outputs.all_modules)}}
     name: JVM tests - ${{ matrix.module }} - Java ${{ matrix.java }}
-    runs-on: runs-on=${{ github.run_id }}-${{ strategy.job-index }}/runner=linux
+    runs-on: ubuntu-latest
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/checkout@v4
 
       - name: Set up JDK ${{ matrix.java }}
@@ -352,10 +346,8 @@ jobs:
       fail-fast: false
       matrix:
         module: ${{fromJson(needs.quick-build.outputs.it_modules)}}
-    runs-on: runs-on=${{ github.run_id }}-${{ strategy.job-index }}/runner=linux
+    runs-on: ubuntu-latest
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -406,10 +398,8 @@ jobs:
       fail-fast: false
       matrix:
         module: ${{fromJson(needs.quick-build.outputs.in_process_embedding_modules)}}
-    runs-on: runs-on=${{ github.run_id }}-${{ strategy.job-index }}/runner=linux
+    runs-on: ubuntu-latest
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -454,10 +444,8 @@ jobs:
     needs: quick-build
     if: needs.quick-build.outputs.run_mcp_conformance == 'true'
     name: MCP Conformance tests
-    runs-on: runs-on=${{ github.run_id }}/runner=linux
+    runs-on: ubuntu-latest
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/checkout@v4
 
       # ubuntu-latest comes with Node 20, but MCP conformance tests require 24
@@ -493,13 +481,11 @@ jobs:
 
 
   build-report:
-    runs-on: runs-on=${{ github.run_id }}/runner=linux
+    runs-on: ubuntu-latest
     name: Build report
     needs: [quick-build, jvm-tests, native-tests, in-process-embedding-model-tests]
     if: always()
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/download-artifact@v4
         with:
           path: build-reports-artifacts
@@ -520,7 +506,7 @@ jobs:
   # runs and is the one required status check. Make it (and only it) required.
   pr-ci-gate:
     name: PR CI Gate
-    runs-on: runs-on=${{ github.run_id }}/runner=linux
+    runs-on: ubuntu-latest
     needs: [quick-build, documentation-check, jvm-tests, native-tests, in-process-embedding-model-tests, mcp-conformance-tests]
     if: always()
     steps:
