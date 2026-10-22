@@ -14,10 +14,10 @@ import io.quarkiverse.langchain4j.a2a.server.ExposeA2AAgent;
 import io.quarkus.test.QuarkusExtensionTest;
 
 /**
- * Every request is served by the one agent there is, so two would leave the server with no way of telling which
- * should answer.
+ * A request is routed to an agent by the tenant it names, so two agents under one tenant would leave it with no way
+ * of telling which should answer.
  */
-public class TwoAgentsTest {
+public class DuplicateTenantTest {
 
     @RegisterExtension
     static final QuarkusExtensionTest unitTest = new QuarkusExtensionTest()
@@ -26,7 +26,7 @@ public class TwoAgentsTest {
                     .isInstanceOf(DeploymentException.class)
                     .hasMessageContaining(FirstAgent.class.getName())
                     .hasMessageContaining(SecondAgent.class.getName())
-                    .hasMessageContaining("an application can only expose one agent"));
+                    .hasMessageContaining("exposed under the tenant 'weather'"));
 
     @Test
     public void test() {
@@ -34,14 +34,14 @@ public class TwoAgentsTest {
     }
 
     @RegisterAiService
-    @ExposeA2AAgent(skills = @ExposeA2AAgent.Skill(id = "first", name = "First", description = "The first", tags = "one"))
+    @ExposeA2AAgent(tenant = "weather", skills = @ExposeA2AAgent.Skill(id = "first", name = "First", description = "The first", tags = "one"))
     public interface FirstAgent {
 
         String chat(@UserMessage String question);
     }
 
     @RegisterAiService
-    @ExposeA2AAgent(skills = @ExposeA2AAgent.Skill(id = "second", name = "Second", description = "The second", tags = "two"))
+    @ExposeA2AAgent(tenant = "weather", skills = @ExposeA2AAgent.Skill(id = "second", name = "Second", description = "The second", tags = "two"))
     public interface SecondAgent {
 
         String chat(@UserMessage String question);
