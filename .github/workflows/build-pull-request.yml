@@ -25,7 +25,7 @@ jobs:
   # Artifacts will be reused in the other jobs
   quick-build:
     name: Quick Build
-    runs-on: runs-on=${{ github.run_id }}/runner=linux
+    runs-on: ubuntu-latest
     # Skip draft PRs, rerun as soon as its removed
     if: >-
       github.event_name != 'pull_request' || (
@@ -39,8 +39,6 @@ jobs:
       in_process_embedding_modules: ${{ steps.matrices.outputs.in_process_embedding_modules }}
 
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/checkout@v4
 
       - name: Reclaim Disk Space
@@ -121,11 +119,9 @@ jobs:
 
   documentation-check:
     name: Documentation check
-    runs-on: runs-on=${{ github.run_id }}/runner=linux
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/checkout@v4
 
       - name: Validate guide metadata
@@ -177,10 +173,8 @@ jobs:
         java: [ 17, 21, 25 ]
         module: ${{fromJson(needs.quick-build.outputs.all_modules)}}
     name: JVM tests - ${{ matrix.module }} - Java ${{ matrix.java }}
-    runs-on: runs-on=${{ github.run_id }}-${{ strategy.job-index }}/runner=linux
+    runs-on: ubuntu-latest
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/checkout@v4
 
       - name: Set up JDK ${{ matrix.java }}
@@ -243,10 +237,8 @@ jobs:
       fail-fast: false
       matrix:
         module: ${{fromJson(needs.quick-build.outputs.it_modules)}}
-    runs-on: runs-on=${{ github.run_id }}-${{ strategy.job-index }}/runner=linux
+    runs-on: ubuntu-latest
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -296,10 +288,8 @@ jobs:
       fail-fast: false
       matrix:
         module: ${{fromJson(needs.quick-build.outputs.in_process_embedding_modules)}}
-    runs-on: runs-on=${{ github.run_id }}-${{ strategy.job-index }}/runner=linux
+    runs-on: ubuntu-latest
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -343,10 +333,8 @@ jobs:
   mcp-conformance-tests:
     needs: quick-build
     name: MCP Conformance tests
-    runs-on: runs-on=${{ github.run_id }}/runner=linux
+    runs-on: ubuntu-latest
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/checkout@v4
 
       # ubuntu-latest comes with Node 20, but MCP conformance tests require 24
@@ -382,13 +370,11 @@ jobs:
 
 
   build-report:
-    runs-on: runs-on=${{ github.run_id }}/runner=linux
+    runs-on: ubuntu-latest
     name: Build report
     needs: [quick-build, jvm-tests, native-tests, in-process-embedding-model-tests]
     if: always()
     steps:
-      - uses: runs-on/action@v2
-
       - uses: actions/download-artifact@v4
         with:
           path: build-reports-artifacts
