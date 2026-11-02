@@ -7,6 +7,7 @@
     <version>999-SNAPSHOT</version>
   </parent>
   <artifactId>quarkus-langchain4j-oracle-deployment</artifactId>
+  <!-- baseline: no fix -->
   <name>Quarkus LangChain4j - Oracle - Deployment</name>
 
   <properties>
